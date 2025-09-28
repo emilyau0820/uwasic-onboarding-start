@@ -1,6 +1,6 @@
 `default_nettype none
 
-module ui_in (
+module input_sync (
     input clk,     // clock (10MHz)
     input rst_n,   // active low reset
     input nCS,     // SPI chip select (active low)

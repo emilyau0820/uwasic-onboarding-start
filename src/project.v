@@ -4,7 +4,7 @@
  */
 
 `default_nettype none
-`include "ui_in.v"
+`include "input_sync.v"
 `include "spi_peripheral.v"
 `include "pwm_peripheral.v"
 
@@ -34,7 +34,7 @@ module tt_um_uwasic_onboarding_emily_au (
   assign uio_oe  = 0;
 
   wire [2:0] sync_ui_in;
-  ui_in ui_in_inst (
+  input_sync input_sync_inst (
     .clk(clk),
     .rst_n(rst_n),
     .nCS(ui_in[2]),
