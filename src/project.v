@@ -4,8 +4,11 @@
  */
 
 `default_nettype none
+`include "ui_in.v"
+`include "spi_peripheral.v"
+`include "pwm_peripheral.v"
 
-module tt_um_uwasic_enboarding_emily_au (
+module tt_um_uwasic_onboarding_emily_au (
   input  wire [7:0] ui_in,    // Dedicated inputs
   output wire [7:0] uo_out,   // Dedicated outputs
   input  wire [7:0] uio_in,   // IOs: Input path
@@ -29,6 +32,29 @@ module tt_um_uwasic_enboarding_emily_au (
   assign uo_out  = ui_in + uio_in;  // Example: ou_out is the sum of ui_in and uio_in
   assign uio_out = 0;
   assign uio_oe  = 0;
+
+  wire [2:0] sync_ui_in;
+  ui_in ui_in_inst (
+    .clk(clk),
+    .rst_n(rst_n),
+    .nCS(ui_in[2]),
+    .COPI(ui_in[1]),
+    .SCLK(ui_in[0]),
+
+    .sync_out(sync_ui_in[2:0])
+  );
+
+  spi_peripheral spi_peripheral_inst (
+    .clk(clk),
+    .rst_n(rst_n),
+    .ui_in(sync_ui_in[2:0]),
+
+    .en_reg_out_7_0(en_reg_out_7_0), // do i need to set unused registers to 0?
+    .en_reg_out_15_8(en_reg_out_15_8),
+    .en_reg_pwm_7_0(en_reg_pwm_7_0),
+    .en_reg_pwm_15_8(en_reg_pwm_15_8),
+    .pwm_duty_cycle(pwm_duty_cycle)
+  );
 
   pwm_peripheral pwm_peripheral_inst (
     .clk(clk),
