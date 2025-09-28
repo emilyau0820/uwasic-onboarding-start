@@ -13,8 +13,8 @@ Ermm idk yet.. ill figure it out later ! (if this text is still here by 2026, th
 
 ## How to test
 
-Explain how to use your project
+I also do not know yet help
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+none..???????
