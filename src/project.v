@@ -47,7 +47,7 @@ module tt_um_uwasic_onboarding_emily_au (
   spi_peripheral spi_peripheral_inst (
     .clk(clk),
     .rst_n(rst_n),
-    .ui_in(sync_ui_in[2:0]),
+    .ui_in_synced(sync_ui_in[2:0]),
 
     .en_reg_out_7_0(en_reg_out_7_0), // do i need to set unused registers to 0?
     .en_reg_out_15_8(en_reg_out_15_8),

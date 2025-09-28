@@ -3,7 +3,7 @@
 module spi_peripheral (
     input clk,     // clock (10MHz)
     input rst_n,   // active low reset
-    input [2:0] ui_in,  // SPI chip select (active low), write to peripherals, clock
+    input [2:0] ui_in_synced,  // SPI chip select (active low), write to peripherals, clock
 
     output reg [7:0] en_reg_out_7_0, // data to write
     output reg [7:0] en_reg_out_15_8, // read/write (1b), address (7b)
@@ -22,8 +22,8 @@ module spi_peripheral (
             transaction_active <= 1'b0;
         end
         else begin
-            prev_SCLK <= ui_in[0];
-            prev_nCS <= ui_in[2];
+            prev_SCLK <= ui_in_synced[0];
+            prev_nCS <= ui_in_synced[2];
             if (nCS_negedge) begin
                 transaction_active <= 1'b1;
             end
@@ -34,9 +34,9 @@ module spi_peripheral (
     end
 
     wire sample_now, nCS_posedge, nCS_negedge;
-    assign sample_now = prev_SCLK && ~ui_in[0];
-    assign nCS_posedge = ~prev_nCS && ui_in[2];
-    assign nCS_negedge = prev_nCS && ~ui_in[2];
+    assign sample_now = prev_SCLK && ~ui_in_synced[0];
+    assign nCS_posedge = ~prev_nCS && ui_in_synced[2];
+    assign nCS_negedge = prev_nCS && ~ui_in_synced[2];
 
     // receiving data
     reg [15:0] shift_reg; // 16-bit transaction (r/w (15), address (14-8), data (7-0))
@@ -51,7 +51,7 @@ module spi_peripheral (
         else begin
             if (transaction_active) begin // valid transaction
                 if (sample_now) begin 
-                    shift_reg[15:0] <= {shift_reg[14:0], ui_in[1]}; // dark magic
+                    shift_reg[15:0] <= {shift_reg[14:0], ui_in_synced[1]}; // dark magic
                     bit_counter <= bit_counter + 1;
                 end
             end
@@ -78,6 +78,7 @@ module spi_peripheral (
                     7'd2: en_reg_pwm_7_0 <= shift_reg[7:0];
                     7'd3: en_reg_pwm_15_8 <= shift_reg[7:0];
                     7'd4: pwm_duty_cycle <= shift_reg[7:0];
+                    default:;
                 endcase
             end
         end
