@@ -3,10 +3,12 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge
+from cocotb.triggers import RisingEdge, with_timeout
 from cocotb.triggers import ClockCycles
 from cocotb.types import Logic
 from cocotb.types import LogicArray
+from cocotb.result import SimTimeoutError
+from cocotb.utils import get_sim_time
 
 async def await_half_sclk(dut):
     """Wait for the SCLK signal to go high or low."""
@@ -149,13 +151,181 @@ async def test_spi(dut):
 
     dut._log.info("SPI test completed successfully")
 
+async def detect_rising_edge(dut, timeout_ns=1_000_000):
+    async def wait_for_rising_edge():
+        prev_value = int(dut.uo_out.value)
+
+        while True:
+            await RisingEdge(dut.clk)
+            curr_value = int(dut.uo_out.value)
+
+            if prev_value == 0 and curr_value == 1:
+                return get_sim_time(units="ns")
+
+            prev_value = curr_value
+
+    try:
+        return await with_timeout(wait_for_rising_edge(), timeout_time=timeout_ns, timeout_unit='ns')
+    except SimTimeoutError:
+        dut._log.warning(f"Timeout of {timeout_ns} ns reached while waiting for rising edge.")
+        return None
+
+async def detect_falling_edge(dut, timeout_ns = 1_000_000):
+    async def wait_for_falling_edge():
+        prev_value = int(dut.uo_out.value)
+
+        while True:
+            await RisingEdge(dut.clk)
+            curr_value = int(dut.uo_out.value)
+
+            if prev_value == 1 and curr_value == 0:
+                return get_sim_time(units="ns")
+
+            prev_value = curr_value
+
+    try:
+        return await with_timeout(wait_for_falling_edge(), timeout_time=timeout_ns, timeout_unit='ns')
+    except SimTimeoutError:
+        dut._log.warning(f"Timeout of {timeout_ns} ns reached while waiting for falling edge.")
+        return None
+
 @cocotb.test()
 async def test_pwm_freq(dut):
-    # Write your test here
+    dut._log.info("Start PWM Frequency Test")
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+
+
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    await send_spi_transaction(dut, 1, 0x00, 0x01)
+    await ClockCycles(dut.clk, 100)
+    await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await ClockCycles(dut.clk, 100)
+    await send_spi_transaction(dut, 1, 0x04, 0x01)
+    await ClockCycles(dut.clk, 100)
+
+    t1 = await detect_rising_edge(dut)
+    t2 = await detect_rising_edge(dut)
+
+    period_ns = (t2 - t1)
+    dut._log.info(period_ns, " ns")
+
+    freqency_hz = 1e9 / period_ns
+    dut._log.info(freqency_hz, " Hz")
+
+    dut._log.info(f"Measured PWM frequency: {freqency_hz:.2f} Hz")
+    assert 2970 <= freqency_hz <= 3030, f"PWM frequency {freqency_hz:.2f} Hz out of tolerance!"
+    
     dut._log.info("PWM Frequency test completed successfully")
 
 
 @cocotb.test()
 async def test_pwm_duty(dut):
-    # Write your test here
+    dut._log.info("Start PWM Duty Cycle Test")
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    # Reset
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    # 0% Duty Cycle
+    await send_spi_transaction(dut, 1, 0x00, 0x01)
+    await ClockCycles(dut.clk, 100)
+    await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await ClockCycles(dut.clk, 100)
+    await send_spi_transaction(dut, 1, 0x04, 0x00)
+    await ClockCycles(dut.clk, 100)
+
+    t1_rising_edge = await detect_rising_edge(dut, timeout_ns=500_000)
+    t_falling_edge = await detect_falling_edge(dut, timeout_ns=500_000)
+    t2_rising_edge = await detect_rising_edge(dut, timeout_ns=500_000)
+    if ((t1_rising_edge is None) and (t_falling_edge is None) and (t2_rising_edge is None)):
+        dut._log.info("No edges detected within timeout.")
+        if (dut.uo_out.value == 0):
+            duty = 0
+        else:
+            duty = 100
+    else:
+        period_ns = t2_rising_edge - t1_rising_edge
+        high_time_ns = t_falling_edge - t1_rising_edge
+
+        duty = (high_time_ns/period_ns)*100
+    
+    dut._log.info(f"Measured Duty Cycle: {duty:.2f}")
+
+    assert 0 <= duty <= 1, f"Duty Cycle (0%) failed"
+    dut._log.info("Duty Cycle (0%) passed")
+
+    # 50% Duty Cycle
+    await send_spi_transaction(dut, 1, 0x00, 0x01)
+    await ClockCycles(dut.clk, 100)
+    await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await ClockCycles(dut.clk, 100)
+    await send_spi_transaction(dut, 1, 0x04, 0x80)
+    await ClockCycles(dut.clk, 100)
+
+    t1_rising_edge = await detect_rising_edge(dut, timeout_ns=500_000)
+    t_falling_edge = await detect_falling_edge(dut, timeout_ns=500_000)    
+    t2_rising_edge = await detect_rising_edge(dut, timeout_ns=500_000)
+    if ((t1_rising_edge is None) and (t_falling_edge is None) and (t2_rising_edge is None)):
+        dut._log.info("No edges detected within timeout.")
+        if (dut.uo_out.value == 0):
+            duty = 0
+        else:
+            duty = 100
+    else:
+        period_ns = t2_rising_edge - t1_rising_edge
+        high_time_ns = t_falling_edge - t1_rising_edge
+
+        duty = (high_time_ns/period_ns)*100
+    
+    dut._log.info(f"Measured Duty Cycle: {duty:.2f}")
+
+    assert 49 <= duty <= 51, f"Duty Cycle (50%) failed"
+    dut._log.info("Duty Cycle (50%) passed")
+
+    # 100% Duty Cycle
+    await send_spi_transaction(dut, 1, 0x00, 0x01)
+    await ClockCycles(dut.clk, 100)
+    await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await ClockCycles(dut.clk, 100)
+    await send_spi_transaction(dut, 1, 0x04, 0xff)
+    await ClockCycles(dut.clk, 100)
+
+    t1_rising_edge = await detect_rising_edge(dut, timeout_ns=500_000)
+    t_falling_edge = await detect_falling_edge(dut, timeout_ns=500_000)    
+    t2_rising_edge = await detect_rising_edge(dut, timeout_ns=500_000)
+    if ((t1_rising_edge is None) and (t_falling_edge is None) and (t2_rising_edge is None)):
+        dut._log.info("No edges detected within timeout.")
+        if (dut.uo_out.value == 0):
+            duty = 0
+        else:
+            duty = 100
+    else:
+        period_ns = t2_rising_edge - t1_rising_edge
+        high_time_ns = t_falling_edge - t1_rising_edge
+
+        duty = (high_time_ns/period_ns)*100
+    
+    dut._log.info(f"Measured Duty Cycle: {duty:.2f}")
+
+    assert 99 <= duty <= 101, f"Duty Cycle (100%) failed"
+    dut._log.info("Duty Cycle (100%) passed")
+
+
     dut._log.info("PWM Duty Cycle test completed successfully")
