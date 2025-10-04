@@ -4,9 +4,10 @@
  */
 
 `default_nettype none
-`include "input_sync.v"
-`include "spi_peripheral.v"
-`include "pwm_peripheral.v"
+`timescale 1ns / 1ps
+// `include "input_sync.v"
+// `include "spi_peripheral.v"
+// `include "pwm_peripheral.v"
 
 module tt_um_uwasic_onboarding_emily_au (
   input  wire [7:0] ui_in,    // Dedicated inputs
@@ -29,25 +30,25 @@ module tt_um_uwasic_onboarding_emily_au (
   wire [7:0] pwm_duty_cycle;
 
   // All output pins must be assigned. If not used, assign to 0.
-  assign uo_out  = ui_in + uio_in;  // Example: ou_out is the sum of ui_in and uio_in
-  assign uio_out = 0;
+  // assign uo_out  = ui_in + uio_in;  // Example: ou_out is the sum of ui_in and uio_in
+  // assign uio_out = 0;
   assign uio_oe  = 0;
 
-  wire [2:0] sync_ui_in;
-  input_sync input_sync_inst (
-    .clk(clk),
-    .rst_n(rst_n),
-    .nCS(ui_in[2]),
-    .COPI(ui_in[1]),
-    .SCLK(ui_in[0]),
+  // wire [2:0] sync_ui_in;
+  // input_sync input_sync_inst (
+  //   .clk(clk),
+  //   .rst_n(rst_n),
+  //   .nCS(ui_in[2]),
+  //   .COPI(ui_in[1]),
+  //   .SCLK(ui_in[0]),
 
-    .sync_out(sync_ui_in[2:0])
-  );
+  //   .sync_out(sync_ui_in[2:0])
+  // );
 
   spi_peripheral spi_peripheral_inst (
     .clk(clk),
     .rst_n(rst_n),
-    .ui_in_synced(sync_ui_in[2:0]),
+    .in(ui_in[2:0]),
 
     .en_reg_out_7_0(en_reg_out_7_0), // do i need to set unused registers to 0?
     .en_reg_out_15_8(en_reg_out_15_8),
